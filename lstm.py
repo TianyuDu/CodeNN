@@ -192,7 +192,8 @@ if __name__ == "__main__":
     sample_inputs = np.arange(0, 4*np.pi, 0.2)
     sample_targets = np.sin(sample_inputs)
 
-    for e in range(5000):
+    epochs = int(input("epochs: "))
+    for e in range(epochs):
         grads, loss, preds, _ = forward_backward(
             inputs=sample_inputs,
             targets=sample_targets,
