@@ -90,7 +90,31 @@ def clear_gradients(grads):
 
 def clip_gradient(grads):
     for (key, val) in grads.items():
-        grads[key] = np.clip(val, -1000.0, 1000.0)
+        grads[key] = np.clip(val, -100.0, 100.0)
+
+
+def predict(inputs, h_init, c_init, param):
+    # records.
+    internals = ("x", "z", "f", "i", "c_bar", "c", "o", "h", "v", "y") 
+    rec = {var: {} for var in internals}
+
+    # Values at t - 1, take the initial value.
+    rec["h"][-1] = np.copy(h_init)
+    rec["c"][-1] = np.copy(c_init)
+
+    loss = 0.0
+
+    # ======== Forward Phase ========
+    for t in range(len(inputs)):
+        rec["y"][t],\
+        (rec["h"][t], rec["c"][t]), \
+        (rec["z"][t], rec["f"][t], rec["i"][t], rec["c_bar"][t], rec["o"][t], rec["v"][t]) \
+        = forward(
+            inputs[t],
+            state_prev=(rec["h"][t-1], rec["c"][t-1]),
+            param=param
+        )
+    return rec["y"]
 
 
 def forward_backward(inputs, targets, h_init, c_init, param, grads):
@@ -161,56 +185,75 @@ def grad_desc(p, d, lr):
 
 if __name__ == "__main__":
     # ==== Model Settings ====
-    num_in = 1
-    num_out = 1
-    num_neu = 8
+    name = input("Name of session: ")
+    for epochs in [200 * (x+1) for x in range(50)]:
+        for num_neu in [8, 16, 24]:
+            num_in = 1
+            num_out = 1
+            # num_neu = 8
 
-    # Initialize Parameters
-    param = {
-        # Forget Gate Parameters:
-        "Wf": np.random.randn(num_neu, num_in + num_neu) / num_neu,
-        "bf": np.zeros((num_neu, 1)),
-        # Input Gate Parameters:
-        "Wi": np.random.randn(num_neu, num_in + num_neu) / num_neu,
-        "bi": np.zeros((num_neu, 1)),
-        # Input Modulation Gate (New Cancadiate Cell Value):
-        "Wc": np.random.randn(num_neu, num_in + num_neu) / num_neu,
-        "bc": np.zeros((num_neu, 1)),
-        # Output Gate Parameters:
-        "Wo": np.random.randn(num_neu, num_in + num_neu) / num_neu,
-        "bo": np.zeros((num_neu, 1)),
-        # Prediction Parameters
-        "Wv": np.random.randn(num_out, num_neu) / num_neu,
-        "bv": np.zeros((num_out, 1))
-    }
+            # Initialize Parameters
+            param = {
+                # Forget Gate Parameters:
+                "Wf": np.random.randn(num_neu, num_in + num_neu),
+                "bf": np.zeros((num_neu, 1)),
+                # Input Gate Parameters:
+                "Wi": np.random.randn(num_neu, num_in + num_neu),
+                "bi": np.zeros((num_neu, 1)),
+                # Input Modulation Gate (New Cancadiate Cell Value):
+                "Wc": np.random.randn(num_neu, num_in + num_neu),
+                "bc": np.zeros((num_neu, 1)),
+                # Output Gate Parameters:
+                "Wo": np.random.randn(num_neu, num_in + num_neu),
+                "bo": np.zeros((num_neu, 1)),
+                # Prediction Parameters
+                "Wv": np.random.randn(num_out, num_neu),
+                "bv": np.zeros((num_out, 1))
+            }
 
-    grads = {
-        k: np.zeros_like(v)
-        for (k, v) in param.items()
-    }
+            grads = {
+                k: np.zeros_like(v)
+                for (k, v) in param.items()
+            }
 
-    sample_inputs = np.arange(0, 4*np.pi, 0.2)
-    sample_targets = np.sin(sample_inputs)
+            sample = np.arange(0, 5*np.pi, 0.1)
+            all_target = np.sin(sample)
+            sample_inputs = sample[:int(0.9 * len(sample))]  # Training set.
+            test_inputs = sample[int(0.9 * len(sample)):]  # Test set.
+            sample_targets = np.sin(sample_inputs)
 
-    epochs = int(input("epochs: "))
-    for e in range(epochs):
-        grads, loss, preds, _ = forward_backward(
-            inputs=sample_inputs,
-            targets=sample_targets,
-            h_init=np.zeros((num_neu, 1)),
-            c_init=np.zeros((num_neu, 1)),
-            param=param,
-            grads=grads
-        )
-        param, grads = grad_desc(p=param, d=grads, lr=0.003)
-        if e % 10 == 0:
-            print(f"Epochs={e}, Loss={np.asscalar(loss)}")
+            # epochs = int(input("epochs: "))
+            for e in range(epochs):
+                grads, loss, pred_train, _ = forward_backward(
+                    inputs=sample_inputs,
+                    targets=sample_targets,
+                    h_init=np.zeros((num_neu, 1)),
+                    c_init=np.zeros((num_neu, 1)),
+                    param=param,
+                    grads=grads
+                )
+                param, grads = grad_desc(p=param, d=grads, lr=0.003)
+                if e % 10 == 0:
+                    print(f"Epochs={e}/{epochs}, Loss={np.asscalar(loss)}")
 
-    plt.close()
-    plt.style.use("seaborn-dark")
-    pred = [np.squeeze(x) for x in preds.values()]
-    plt.plot(pred)
-    plt.plot(sample_targets)
-    plt.legend(["predicted", "actual"])
-    plt.grid(True)
-    plt.show()
+            pred_test = predict(
+                inputs=test_inputs,
+                h_init=np.zeros((num_neu, 1)),
+                c_init=np.zeros((num_neu, 1)),
+                param=param
+            )
+
+            plt.close()
+            plt.style.use("seaborn-dark")
+
+            squeeze = lambda arr: [np.squeeze(x) for x in arr.values()]
+            pred_train = squeeze(pred_train)
+            pred_test = squeeze(pred_test)
+
+            plt.plot(sample_inputs, pred_train)
+            plt.plot(test_inputs, pred_test)
+            plt.plot(sample, all_target)
+
+            plt.legend(["predicted train", "predicted test", "actual"], loc="best")
+            plt.grid(True)
+            plt.savefig(f"./figures/{name}-x{num_neu}-ep-{epochs}.png")
