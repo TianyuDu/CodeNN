@@ -160,71 +160,56 @@ def grad_desc(p, d, lr):
 
 
 if __name__ == "__main__":
-    pass
+    # ==== Model Settings ====
+    num_in = 1
+    num_out = 1
+    num_neu = 8
 
-# ==== Model Settings ====
-num_in = 1
-num_out = 1
-num_neu = 8
+    # Initialize Parameters
+    param = {
+        # Forget Gate Parameters:
+        "Wf": np.random.randn(num_neu, num_in + num_neu) / num_neu,
+        "bf": np.zeros((num_neu, 1)),
+        # Input Gate Parameters:
+        "Wi": np.random.randn(num_neu, num_in + num_neu) / num_neu,
+        "bi": np.zeros((num_neu, 1)),
+        # Input Modulation Gate (New Cancadiate Cell Value):
+        "Wc": np.random.randn(num_neu, num_in + num_neu) / num_neu,
+        "bc": np.zeros((num_neu, 1)),
+        # Output Gate Parameters:
+        "Wo": np.random.randn(num_neu, num_in + num_neu) / num_neu,
+        "bo": np.zeros((num_neu, 1)),
+        # Prediction Parameters
+        "Wv": np.random.randn(num_out, num_neu) / num_neu,
+        "bv": np.zeros((num_out, 1))
+    }
 
-# Initialize Parameters
-param = {
-    # Forget Gate Parameters:
-    "Wf": np.random.randn(num_neu, num_in + num_neu) / num_neu,
-    "bf": np.zeros((num_neu, 1)),
-    # Input Gate Parameters:
-    "Wi": np.random.randn(num_neu, num_in + num_neu) / num_neu,
-    "bi": np.zeros((num_neu, 1)),
-    # Input Modulation Gate (New Cancadiate Cell Value):
-    "Wc": np.random.randn(num_neu, num_in + num_neu) / num_neu,
-    "bc": np.zeros((num_neu, 1)),
-    # Output Gate Parameters:
-    "Wo": np.random.randn(num_neu, num_in + num_neu) / num_neu,
-    "bo": np.zeros((num_neu, 1)),
-    # Prediction Parameters
-    "Wv": np.random.randn(num_out, num_neu) / num_neu,
-    "bv": np.zeros((num_out, 1))
-}
+    grads = {
+        k: np.zeros_like(v)
+        for (k, v) in param.items()
+    }
 
-grads = {
-    k: np.zeros_like(v)
-    for (k, v) in param.items()
-}
+    sample_inputs = np.arange(0, 4*np.pi, 0.2)
+    sample_targets = np.sin(sample_inputs)
 
-sample_inputs = np.arange(0, 4*np.pi, 0.2)
-sample_targets = np.sin(sample_inputs)
+    for e in range(5000):
+        grads, loss, preds, _ = forward_backward(
+            inputs=sample_inputs,
+            targets=sample_targets,
+            h_init=np.zeros((num_neu, 1)),
+            c_init=np.zeros((num_neu, 1)),
+            param=param,
+            grads=grads
+        )
+        param, grads = grad_desc(p=param, d=grads, lr=0.003)
+        if e % 10 == 0:
+            print(f"Epochs={e}, Loss={np.asscalar(loss)}")
 
-
-for e in range(5000):
-    grads, loss, preds, _ = forward_backward(
-        inputs=sample_inputs,
-        targets=sample_targets,
-        h_init=np.zeros((num_neu, 1)),
-        c_init=np.zeros((num_neu, 1)),
-        param=param,
-        grads=grads
-    )
-    param, grads = grad_desc(p=param, d=grads, lr=0.003)
-    if e % 10 == 0:
-        print(f"Epochs={e}, Loss={np.asscalar(loss)}")
-
-plt.close()
-plt.style.use("seaborn-dark")
-pred = [np.squeeze(x) for x in preds.values()]
-plt.plot(pred)
-plt.plot(sample_targets)
-plt.legend(["predicted", "actual"])
-plt.grid(True)
-plt.show()
-
-
-
-
-
-
-
-
-
-
-
-
+    plt.close()
+    plt.style.use("seaborn-dark")
+    pred = [np.squeeze(x) for x in preds.values()]
+    plt.plot(pred)
+    plt.plot(sample_targets)
+    plt.legend(["predicted", "actual"])
+    plt.grid(True)
+    plt.show()
